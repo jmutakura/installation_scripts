@@ -1,5 +1,5 @@
 # ============================================
-# Developer Environment Setup Script (Chocolatey)
+# Developer Environment Setup Script (Scoop)
 # ============================================
 
 # Color functions for good output
@@ -43,77 +43,136 @@ function Write-LogWarning {
     Write-Host $Message -ForegroundColor Yellow
 }
 
-function Install-ChocoPackage {
-    param([string]$Package)
+function Write-Step {
+    param([string]$Message)
+    Write-Host "`n  >> " -ForegroundColor Blue -NoNewline
+    Write-Host $Message -ForegroundColor White
+}
 
-    Write-LogInfo "Installing $Package..."
+# Check if Scoop is installed
+function Test-ScoopInstalled {
+    return (Get-Command scoop -ErrorAction SilentlyContinue) -ne $null
+}
+
+# Check if a Scoop app is installed
+function Test-ScoopAppInstalled {
+    param([string]$AppName)
+    $installed = scoop list | Select-String -Pattern "^\s*$AppName\s" -Quiet
+    return $installed
+}
+
+# Install Scoop
+function Install-Scoop {
+    Write-Step "Installing Scoop package manager..."
+
     try {
-        choco install $Package -y
-        Write-LogSuccess "$Package installed successfully"
+        Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+        Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+        Write-LogSuccess "Scoop installed successfully"
         return $true
     }
     catch {
-        Write-LogError "Failed to install $Package: $_"
+        Write-LogError "Failed to install Scoop: $_"
         return $false
     }
 }
 
-function Install-Windows {
-    Write-Header "Developer Environment Setup"
+# Add Scoop bucket if not already added
+function Add-ScoopBucket {
+    param([string]$BucketName)
 
-    # Check if running as administrator
-    $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if (-not $isAdmin) {
-        Write-LogError "This script must be run as Administrator"
-        exit 1
+    $buckets = scoop bucket list
+    if ($buckets -match $BucketName) {
+        Write-LogInfo "Bucket '$BucketName' already added"
+        return $true
     }
 
-    # Check if Chocolatey is installed
-    if (!(Get-Command choco -ErrorAction SilentlyContinue)) {
-        Write-LogInfo "Installing Chocolatey..."
-        try {
-            Set-ExecutionPolicy Bypass -Scope Process -Force
-            [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-            Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
-            Write-LogSuccess "Chocolatey installed successfully"
-        }
-        catch {
-            Write-LogError "Failed to install Chocolatey: $_"
-            exit 1
-        }
+    try {
+        scoop bucket add $BucketName | Out-Null
+        Write-LogSuccess "Added bucket: $BucketName"
+        return $true
     }
-    else {
-        Write-LogSuccess "Chocolatey is already installed"
+    catch {
+        Write-LogError "Failed to add bucket '$BucketName': $_"
+        return $false
     }
-
-    # Array of packages to install
-    $packages = @(
-        "nodejs",
-        "python",
-        "vscode",
-        "androidstudio",
-        "git.install",
-        "docker-desktop",
-        "webstorm"
-    )
-
-    # Install packages
-    foreach ($package in $packages) {
-        if (!(Install-ChocoPackage $package)) {
-            Write-LogError "Installation process failed at package: $package"
-            exit 1
-        }
-    }
-
-    Write-Header "Installation Complete"
-    Write-LogSuccess "All packages installed successfully"
-    Write-LogInfo "Please restart your computer to complete the installation"
 }
 
+# Install Scoop package
+function Install-ScoopPackage {
+    param(
+        [string]$Package,
+        [string]$DisplayName
+    )
+
+    $appName = $Package.Split("/")[-1]
+
+    if (Test-ScoopAppInstalled $appName) {
+        Write-LogWarning "$DisplayName is already installed (skipping)"
+        return $true
+    }
+
+    Write-LogInfo "Installing $DisplayName..."
+    try {
+        scoop install $Package
+        Write-LogSuccess "$DisplayName installed successfully"
+        return $true
+    }
+    catch {
+        Write-LogError "Failed to install $DisplayName"
+        return $false
+    }
+}
+
+# Main installation function
+function Install-DeveloperEnvironment {
+    Write-Header "Developer Environment Setup"
+
+    # Check if Scoop is installed
+    if (-not (Test-ScoopInstalled)) {
+        Write-LogWarning "Scoop is not installed"
+        if (-not (Install-Scoop)) {
+            Write-LogError "Cannot proceed without Scoop"
+            exit 1
+        }
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+    }
+    else {
+        Write-LogSuccess "Scoop is already installed"
+    }
+
+    Write-Header "Installing Packages"
+
+    # Add required buckets
+    Write-Step "Setting up Scoop buckets..."
+    Add-ScoopBucket "java"
+    Add-ScoopBucket "extras"
+    Add-ScoopBucket "versions"
+    Add-ScoopBucket "main"
+
+    # Install packages
+    Write-Step "Installing packages..."
+    Install-ScoopPackage -Package "main/nodejs-lts" -DisplayName "Node.js LTS"
+    Install-ScoopPackage -Package "versions/python314" -DisplayName "Python 3.14"
+    Install-ScoopPackage -Package "main/git" -DisplayName "Git"
+    Install-ScoopPackage -Package "main/docker" -DisplayName "Docker"
+    Install-ScoopPackage -Package "extras/vscode" -DisplayName "Visual Studio Code"
+    Install-ScoopPackage -Package "extras/android-studio" -DisplayName "Android Studio"
+
+    Write-Header "Installation Complete"
+    Write-LogSuccess "Setup completed successfully!"
+
+    Write-Host "`n  Press any key to exit..." -ForegroundColor Gray
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
+
+# Run the installation
 try {
-    Install-Windows
+    Install-DeveloperEnvironment
 }
 catch {
     Write-LogError "An unexpected error occurred: $_"
+    Write-Host "`n  Press any key to exit..." -ForegroundColor Gray
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     exit 1
 }
