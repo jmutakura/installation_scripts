@@ -124,6 +124,36 @@ function Install-ScoopPackage {
     }
 }
 
+# Interactive package selection
+function Show-PackageMenu {
+    Write-Header "Select Packages to Install"
+
+    $packages = @(
+        @{ Name = "Node.js LTS"; Bucket = "main"; Package = "main/nodejs-lts"; Selected = $true },
+        @{ Name = "Python 3.14"; Bucket = "versions"; Package = "versions/python314"; Selected = $true },
+        @{ Name = "Docker"; Bucket = "main"; Package = "main/docker"; Selected = $true },
+        @{ Name = "Git"; Bucket = "main"; Package = "main/git"; Selected = $true },
+        @{ Name = "Android Studio"; Bucket = "extras"; Package = "extras/android-studio"; Selected = $true },
+        @{ Name = "Visual Studio Code"; Bucket = "extras"; Package = "extras/vscode"; Selected = $true }
+    )
+
+    Write-Host "  Select packages to install (Y/N for each, or A for all):`n" -ForegroundColor White
+
+    $installAll = Read-Host "  Install all packages? (Y/N)"
+
+    if ($installAll -eq "Y" -or $installAll -eq "y" -or $installAll -eq "A" -or $installAll -eq "a") {
+        return $packages
+    }
+
+    Write-Host ""
+    foreach ($pkg in $packages) {
+        $response = Read-Host "  Install $($pkg.Name)? (Y/N)"
+        $pkg.Selected = ($response -eq "Y" -or $response -eq "y")
+    }
+
+    return $packages
+}
+
 # Main installation function
 function Install-DeveloperEnvironment {
     Write-Header "Developer Environment Setup"
@@ -141,23 +171,31 @@ function Install-DeveloperEnvironment {
         Write-LogSuccess "Scoop is already installed"
     }
 
-    Write-Header "Installing Packages"
+    # Get user package selection
+    $selectedPackages = Show-PackageMenu
+    $packagesToInstall = $selectedPackages | Where-Object { $_.Selected -eq $true }
+
+    if ($packagesToInstall.Count -eq 0) {
+        Write-LogWarning "No packages selected for installation"
+        exit 0
+    }
+
+    Write-Header "Installing Selected Packages"
+
+    # Group packages by bucket
+    $buckets = $packagesToInstall | ForEach-Object { $_.Bucket } | Select-Object -Unique
 
     # Add required buckets
     Write-Step "Setting up Scoop buckets..."
-    Add-ScoopBucket "java"
-    Add-ScoopBucket "extras"
-    Add-ScoopBucket "versions"
-    Add-ScoopBucket "main"
+    foreach ($bucket in $buckets) {
+        Add-ScoopBucket $bucket
+    }
 
     # Install packages
     Write-Step "Installing packages..."
-    Install-ScoopPackage -Package "main/nodejs-lts" -DisplayName "Node.js LTS"
-    Install-ScoopPackage -Package "versions/python314" -DisplayName "Python 3.14"
-    Install-ScoopPackage -Package "main/git" -DisplayName "Git"
-    Install-ScoopPackage -Package "main/docker" -DisplayName "Docker"
-    Install-ScoopPackage -Package "extras/vscode" -DisplayName "Visual Studio Code"
-    Install-ScoopPackage -Package "extras/android-studio" -DisplayName "Android Studio"
+    foreach ($pkg in $packagesToInstall) {
+        Install-ScoopPackage -Package $pkg.Package -DisplayName $pkg.Name
+    }
 
     Write-Header "Installation Complete"
     Write-LogSuccess "Setup completed successfully!"

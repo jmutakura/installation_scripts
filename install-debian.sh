@@ -30,98 +30,180 @@ function write_header() {
     echo ""
 }
 
-function log_error() {
+function write_log_error() {
     echo -e "  ${RED}[X]${NC} ${RED}$1${NC}"
 }
 
-function log_success() {
+function write_log_success() {
     echo -e "  ${GREEN}[OK]${NC} ${GREEN}$1${NC}"
 }
 
-function log_info() {
+function write_log_info() {
     echo -e "  ${CYAN}[i]${NC} ${WHITE}$1${NC}"
 }
 
-function log_warning() {
+function write_log_warning() {
     echo -e "  ${YELLOW}[!]${NC} ${YELLOW}$1${NC}"
 }
 
+function write_step() {
+    echo ""
+    echo -e "  ${BLUE}>>${NC} ${WHITE}$1${NC}"
+}
+
+# Check if package is installed
+function test_package_installed() {
+    local package=$1
+    dpkg -l | grep -q "^ii  $package "
+}
+
+# Install APT package
 function install_apt_package() {
     local package=$1
     local display_name=$2
 
-    log_info "Installing $display_name..."
+    if test_package_installed "$package"; then
+        write_log_warning "$display_name is already installed (skipping)"
+        return 0
+    fi
+
+    write_log_info "Installing $display_name..."
+
     if sudo apt install -y "$package" &>/dev/null; then
-        log_success "$display_name installed successfully"
+        write_log_success "$display_name installed successfully"
         return 0
     else
-        log_error "Failed to install $display_name"
+        write_log_error "Failed to install $display_name"
         return 1
     fi
 }
 
-function install_debian() {
+# Interactive package selection
+function show_package_menu() {
+    write_header "Select Packages to Install"
+
+    echo -e "  ${WHITE}Select packages to install (Y/N for each, or A for all):${NC}"
+    echo ""
+
+    read -p "  Install all packages? (Y/N): " install_all
+
+    if [[ "$install_all" =~ ^[YyAa]$ ]]; then
+        SELECTED_NODE=true
+        SELECTED_PYTHON=true
+        SELECTED_DOCKER=true
+        SELECTED_GIT=true
+        SELECTED_CHROME=true
+        SELECTED_VSCODE=true
+    else
+        echo ""
+        read -p "  Install Node.js (LTS)? (Y/N): " response
+        [[ "$response" =~ ^[Yy]$ ]] && SELECTED_NODE=true || SELECTED_NODE=false
+
+        read -p "  Install Python 3? (Y/N): " response
+        [[ "$response" =~ ^[Yy]$ ]] && SELECTED_PYTHON=true || SELECTED_PYTHON=false
+
+        read -p "  Install Docker? (Y/N): " response
+        [[ "$response" =~ ^[Yy]$ ]] && SELECTED_DOCKER=true || SELECTED_DOCKER=false
+
+        read -p "  Install Git? (Y/N): " response
+        [[ "$response" =~ ^[Yy]$ ]] && SELECTED_GIT=true || SELECTED_GIT=false
+
+        read -p "  Install Google Chrome? (Y/N): " response
+        [[ "$response" =~ ^[Yy]$ ]] && SELECTED_CHROME=true || SELECTED_CHROME=false
+
+        read -p "  Install Visual Studio Code? (Y/N): " response
+        [[ "$response" =~ ^[Yy]$ ]] && SELECTED_VSCODE=true || SELECTED_VSCODE=false
+    fi
+}
+
+# Main installation function
+function install_developer_environment() {
     write_header "Developer Environment Setup"
+
+    # Check if running as root
+    if [[ $EUID -eq 0 ]]; then
+        write_log_error "This script should not be run as root"
+        exit 1
+    fi
 
     # Check if running on Debian/Ubuntu
     if [ ! -f /etc/debian_version ]; then
-        log_error "This script only supports Debian-based systems (Ubuntu, Debian, etc.)"
+        write_log_error "This script only supports Debian-based systems (Ubuntu, Debian, etc.)"
         exit 1
     fi
 
-    log_success "Detected Debian-based system"
+    write_log_success "Detected Debian-based system"
+
+    # Get user package selection
+    show_package_menu
+
+    write_header "Installing Selected Packages"
 
     # Update package list
-    log_info "Updating package list..."
+    write_step "Updating package list..."
     if sudo apt update &>/dev/null; then
-        log_success "Package list updated"
+        write_log_success "Package list updated"
     else
-        log_error "Failed to update package list"
+        write_log_error "Failed to update package list"
         exit 1
     fi
 
-    # Basic packages
-    declare -a packages=(
-        "nodejs"
-        "npm"
-        "python3"
-        "python3-pip"
-        "git"
-        "docker.io"
-    )
+    # Install packages
+    write_step "Installing packages..."
 
-    for package in "${packages[@]}"; do
-        if ! install_apt_package "$package" "$package"; then
-            log_error "Installation process failed at package: $package"
-            exit 1
+    if [[ "$SELECTED_NODE" == true ]]; then
+        write_log_info "Adding NodeSource repository..."
+        if curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - &>/dev/null; then
+            install_apt_package "nodejs" "Node.js LTS"
         fi
-    done
-
-    # Install VSCode
-    log_info "Installing Visual Studio Code..."
-    if wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /tmp/packages.microsoft.gpg &>/dev/null; then
-        sudo install -D -o root -g root -m 644 /tmp/packages.microsoft.gpg /etc/apt/keyrings/packages.microsoft.gpg &>/dev/null
-        sudo sh -c 'echo "deb [arch=amd64,arm64,armhf signed-by=/etc/apt/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list' &>/dev/null
-        rm /tmp/packages.microsoft.gpg
-        sudo apt update &>/dev/null
-        install_apt_package "code" "Visual Studio Code"
     fi
 
-    # Configure Docker
-    log_info "Configuring Docker..."
-    sudo systemctl start docker &>/dev/null
-    sudo systemctl enable docker &>/dev/null
-    sudo usermod -aG docker "$USER" &>/dev/null
-    log_info "You may need to log out and back in for Docker group changes to take effect"
+    if [[ "$SELECTED_PYTHON" == true ]]; then
+        install_apt_package "python3" "Python 3"
+        install_apt_package "python3-pip" "Python 3 pip"
+    fi
+
+    if [[ "$SELECTED_DOCKER" == true ]]; then
+        if install_apt_package "docker.io" "Docker"; then
+            sudo systemctl start docker &>/dev/null
+            sudo systemctl enable docker &>/dev/null
+            sudo usermod -aG docker "$USER" &>/dev/null
+            write_log_info "You may need to log out and back in for Docker group changes to take effect"
+        fi
+    fi
+
+    if [[ "$SELECTED_GIT" == true ]]; then
+        install_apt_package "git" "Git"
+    fi
+
+    if [[ "$SELECTED_CHROME" == true ]]; then
+        write_log_info "Installing Google Chrome..."
+        if wget -q -O /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb &>/dev/null; then
+            if sudo apt install -y /tmp/google-chrome.deb &>/dev/null; then
+                rm /tmp/google-chrome.deb
+                write_log_success "Google Chrome installed successfully"
+            fi
+        fi
+    fi
+
+    if [[ "$SELECTED_VSCODE" == true ]]; then
+        write_log_info "Installing Visual Studio Code..."
+        if wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /tmp/packages.microsoft.gpg &>/dev/null; then
+            sudo install -D -o root -g root -m 644 /tmp/packages.microsoft.gpg /etc/apt/keyrings/packages.microsoft.gpg &>/dev/null
+            sudo sh -c 'echo "deb [arch=amd64,arm64,armhf signed-by=/etc/apt/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list' &>/dev/null
+            rm /tmp/packages.microsoft.gpg
+            sudo apt update &>/dev/null
+            install_apt_package "code" "Visual Studio Code"
+        fi
+    fi
 
     write_header "Installation Complete"
-    log_success "All packages installed successfully"
+    write_log_success "Setup completed successfully!"
+
+    echo ""
+    echo -e "  ${GRAY}Press any key to exit...${NC}"
+    read -n 1 -s
 }
 
-# Check if running as root
-if [[ $EUID -eq 0 ]]; then
-    log_error "This script should not be run as root"
-    exit 1
-fi
-
-install_debian
+# Run the installation
+install_developer_environment
