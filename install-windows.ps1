@@ -129,11 +129,15 @@ function Show-PackageMenu {
     Write-Header "Select Packages to Install"
 
     $packages = @(
+        @{ Name = "Java OpenJDK 25"; Bucket = "java"; Package = "java/openjdk25"; Selected = $true },
         @{ Name = "Node.js LTS"; Bucket = "main"; Package = "main/nodejs-lts"; Selected = $true },
         @{ Name = "Python 3.14"; Bucket = "versions"; Package = "versions/python314"; Selected = $true },
         @{ Name = "Docker"; Bucket = "main"; Package = "main/docker"; Selected = $true },
         @{ Name = "Git"; Bucket = "main"; Package = "main/git"; Selected = $true },
         @{ Name = "Android Studio"; Bucket = "extras"; Package = "extras/android-studio"; Selected = $true },
+        @{ Name = "IntelliJ IDEA"; Bucket = "extras"; Package = "extras/idea"; Selected = $true },
+        @{ Name = "Google Chrome"; Bucket = "extras"; Package = "extras/googlechrome"; Selected = $true },
+        @{ Name = "Slack"; Bucket = "extras"; Package = "extras/slack"; Selected = $true },
         @{ Name = "Visual Studio Code"; Bucket = "extras"; Package = "extras/vscode"; Selected = $true }
     )
 

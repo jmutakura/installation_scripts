@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ============================================
-# Developer Environment Setup Script (APT)
+# Developer Environment Setup Script (APT/Snap)
 # For Debian-based systems (Ubuntu, Debian, etc.)
 # ============================================
 
@@ -16,6 +16,7 @@ WHITE='\033[1;37m'
 GRAY='\033[0;90m'
 NC='\033[0m' # No Color
 
+# Display functions
 function write_header() {
     local message="$1"
     local width=64
@@ -54,7 +55,7 @@ function write_step() {
 # Check if package is installed
 function test_package_installed() {
     local package=$1
-    dpkg -l | grep -q "^ii  $package "
+    dpkg -l | grep -q "^ii  $package " || snap list 2>/dev/null | grep -q "^$package "
 }
 
 # Install APT package
@@ -78,6 +79,35 @@ function install_apt_package() {
     fi
 }
 
+# Install Snap package
+function install_snap_package() {
+    local package=$1
+    local display_name=$2
+    local classic=$3
+
+    if snap list 2>/dev/null | grep -q "^$package "; then
+        write_log_warning "$display_name is already installed (skipping)"
+        return 0
+    fi
+
+    write_log_info "Installing $display_name..."
+
+    if [ "$classic" = true ]; then
+        if sudo snap install "$package" --classic &>/dev/null; then
+            write_log_success "$display_name installed successfully"
+            return 0
+        fi
+    else
+        if sudo snap install "$package" &>/dev/null; then
+            write_log_success "$display_name installed successfully"
+            return 0
+        fi
+    fi
+
+    write_log_error "Failed to install $display_name"
+    return 1
+}
+
 # Interactive package selection
 function show_package_menu() {
     write_header "Select Packages to Install"
@@ -88,14 +118,21 @@ function show_package_menu() {
     read -p "  Install all packages? (Y/N): " install_all
 
     if [[ "$install_all" =~ ^[YyAa]$ ]]; then
+        SELECTED_JAVA=true
         SELECTED_NODE=true
         SELECTED_PYTHON=true
         SELECTED_DOCKER=true
         SELECTED_GIT=true
+        SELECTED_ANDROID_STUDIO=true
+        SELECTED_INTELLIJ=true
         SELECTED_CHROME=true
+        SELECTED_SLACK=true
         SELECTED_VSCODE=true
     else
         echo ""
+        read -p "  Install Java OpenJDK 25? (Y/N): " response
+        [[ "$response" =~ ^[Yy]$ ]] && SELECTED_JAVA=true || SELECTED_JAVA=false
+
         read -p "  Install Node.js (LTS)? (Y/N): " response
         [[ "$response" =~ ^[Yy]$ ]] && SELECTED_NODE=true || SELECTED_NODE=false
 
@@ -108,8 +145,17 @@ function show_package_menu() {
         read -p "  Install Git? (Y/N): " response
         [[ "$response" =~ ^[Yy]$ ]] && SELECTED_GIT=true || SELECTED_GIT=false
 
+        read -p "  Install Android Studio? (Y/N): " response
+        [[ "$response" =~ ^[Yy]$ ]] && SELECTED_ANDROID_STUDIO=true || SELECTED_ANDROID_STUDIO=false
+
+        read -p "  Install IntelliJ IDEA? (Y/N): " response
+        [[ "$response" =~ ^[Yy]$ ]] && SELECTED_INTELLIJ=true || SELECTED_INTELLIJ=false
+
         read -p "  Install Google Chrome? (Y/N): " response
         [[ "$response" =~ ^[Yy]$ ]] && SELECTED_CHROME=true || SELECTED_CHROME=false
+
+        read -p "  Install Slack? (Y/N): " response
+        [[ "$response" =~ ^[Yy]$ ]] && SELECTED_SLACK=true || SELECTED_SLACK=false
 
         read -p "  Install Visual Studio Code? (Y/N): " response
         [[ "$response" =~ ^[Yy]$ ]] && SELECTED_VSCODE=true || SELECTED_VSCODE=false
@@ -148,8 +194,27 @@ function install_developer_environment() {
         exit 1
     fi
 
+    # Ensure snapd is installed if needed
+    if [[ "$SELECTED_ANDROID_STUDIO" == true ]] || [[ "$SELECTED_INTELLIJ" == true ]] || \
+       [[ "$SELECTED_SLACK" == true ]]; then
+        write_step "Ensuring snapd is installed..."
+        if ! command -v snap &> /dev/null; then
+            if sudo apt install -y snapd &>/dev/null; then
+                write_log_success "Snapd installed"
+            else
+                write_log_error "Failed to install snapd"
+            fi
+        else
+            write_log_info "Snapd already installed"
+        fi
+    fi
+
     # Install packages
     write_step "Installing packages..."
+
+    if [[ "$SELECTED_JAVA" == true ]]; then
+        install_apt_package "openjdk-21-jdk" "Java OpenJDK 21"
+    fi
 
     if [[ "$SELECTED_NODE" == true ]]; then
         write_log_info "Adding NodeSource repository..."
@@ -176,6 +241,14 @@ function install_developer_environment() {
         install_apt_package "git" "Git"
     fi
 
+    if [[ "$SELECTED_ANDROID_STUDIO" == true ]]; then
+        install_snap_package "android-studio" "Android Studio" true
+    fi
+
+    if [[ "$SELECTED_INTELLIJ" == true ]]; then
+        install_snap_package "intellij-idea-community" "IntelliJ IDEA Community" true
+    fi
+
     if [[ "$SELECTED_CHROME" == true ]]; then
         write_log_info "Installing Google Chrome..."
         if wget -q -O /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb &>/dev/null; then
@@ -184,6 +257,10 @@ function install_developer_environment() {
                 write_log_success "Google Chrome installed successfully"
             fi
         fi
+    fi
+
+    if [[ "$SELECTED_SLACK" == true ]]; then
+        install_snap_package "slack" "Slack" true
     fi
 
     if [[ "$SELECTED_VSCODE" == true ]]; then

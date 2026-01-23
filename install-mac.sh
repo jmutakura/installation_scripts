@@ -15,6 +15,7 @@ WHITE='\033[1;37m'
 GRAY='\033[0;90m'
 NC='\033[0m' # No Color
 
+# Display functions
 function write_header() {
     local message="$1"
     local width=64
@@ -93,12 +94,18 @@ function install_brew_package() {
     write_log_info "Installing $display_name..."
 
     if [ "$is_cask" = true ]; then
-        if brew install --cask "$package"; then
+        if brew install --cask "$package" 2>&1 | grep -q "already installed"; then
+            write_log_warning "$display_name is already installed"
+            return 0
+        elif brew install --cask "$package"; then
             write_log_success "$display_name installed successfully"
             return 0
         fi
     else
-        if brew install "$package"; then
+        if brew install "$package" 2>&1 | grep -q "already installed"; then
+            write_log_warning "$display_name is already installed"
+            return 0
+        elif brew install "$package"; then
             write_log_success "$display_name installed successfully"
             return 0
         fi
@@ -118,15 +125,21 @@ function show_package_menu() {
     read -p "  Install all packages? (Y/N): " install_all
 
     if [[ "$install_all" =~ ^[YyAa]$ ]]; then
+        SELECTED_JAVA=true
         SELECTED_NODE=true
         SELECTED_PYTHON=true
         SELECTED_DOCKER=true
         SELECTED_GIT=true
         SELECTED_ANDROID_STUDIO=true
+        SELECTED_INTELLIJ=true
         SELECTED_CHROME=true
+        SELECTED_SLACK=true
         SELECTED_VSCODE=true
     else
         echo ""
+        read -p "  Install Java OpenJDK 25? (Y/N): " response
+        [[ "$response" =~ ^[Yy]$ ]] && SELECTED_JAVA=true || SELECTED_JAVA=false
+
         read -p "  Install Node.js 24? (Y/N): " response
         [[ "$response" =~ ^[Yy]$ ]] && SELECTED_NODE=true || SELECTED_NODE=false
 
@@ -142,8 +155,14 @@ function show_package_menu() {
         read -p "  Install Android Studio? (Y/N): " response
         [[ "$response" =~ ^[Yy]$ ]] && SELECTED_ANDROID_STUDIO=true || SELECTED_ANDROID_STUDIO=false
 
+        read -p "  Install IntelliJ IDEA? (Y/N): " response
+        [[ "$response" =~ ^[Yy]$ ]] && SELECTED_INTELLIJ=true || SELECTED_INTELLIJ=false
+
         read -p "  Install Google Chrome? (Y/N): " response
         [[ "$response" =~ ^[Yy]$ ]] && SELECTED_CHROME=true || SELECTED_CHROME=false
+
+        read -p "  Install Slack? (Y/N): " response
+        [[ "$response" =~ ^[Yy]$ ]] && SELECTED_SLACK=true || SELECTED_SLACK=false
 
         read -p "  Install Visual Studio Code? (Y/N): " response
         [[ "$response" =~ ^[Yy]$ ]] && SELECTED_VSCODE=true || SELECTED_VSCODE=false
@@ -183,6 +202,10 @@ function install_developer_environment() {
     # Install packages
     write_step "Installing packages..."
 
+    if [[ "$SELECTED_JAVA" == true ]]; then
+        install_brew_package "openjdk@25" "Java OpenJDK 25" false
+    fi
+
     if [[ "$SELECTED_NODE" == true ]]; then
         install_brew_package "node@24" "Node.js 24" false
     fi
@@ -203,8 +226,16 @@ function install_developer_environment() {
         install_brew_package "android-studio" "Android Studio" true
     fi
 
+    if [[ "$SELECTED_INTELLIJ" == true ]]; then
+        install_brew_package "intellij-idea" "IntelliJ IDEA" true
+    fi
+
     if [[ "$SELECTED_CHROME" == true ]]; then
         install_brew_package "google-chrome" "Google Chrome" true
+    fi
+
+    if [[ "$SELECTED_SLACK" == true ]]; then
+        install_brew_package "slack" "Slack" true
     fi
 
     if [[ "$SELECTED_VSCODE" == true ]]; then
