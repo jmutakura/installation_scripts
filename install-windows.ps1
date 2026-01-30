@@ -9,11 +9,11 @@ function Write-Header {
     $padding = $width - $Message.Length
     $leftPad = [Math]::Floor($padding / 2)
     $rightPad = $padding - $leftPad
-
+    
     $topLine = "+" + ("-" * $width) + "+"
     $middleLine = "|" + (" " * $leftPad) + $Message + (" " * $rightPad) + "|"
     $bottomLine = "+" + ("-" * $width) + "+"
-
+    
     Write-Host "`n$topLine" -ForegroundColor Magenta
     Write-Host $middleLine -ForegroundColor Magenta
     Write-Host "$bottomLine`n" -ForegroundColor Magenta
@@ -64,7 +64,7 @@ function Test-ScoopAppInstalled {
 # Install Scoop
 function Install-Scoop {
     Write-Step "Installing Scoop package manager..."
-
+    
     try {
         Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
         Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
@@ -80,13 +80,13 @@ function Install-Scoop {
 # Add Scoop bucket if not already added
 function Add-ScoopBucket {
     param([string]$BucketName)
-
+    
     $buckets = scoop bucket list
     if ($buckets -match $BucketName) {
         Write-LogInfo "Bucket '$BucketName' already added"
         return $true
     }
-
+    
     try {
         scoop bucket add $BucketName | Out-Null
         Write-LogSuccess "Added bucket: $BucketName"
@@ -104,14 +104,14 @@ function Install-ScoopPackage {
         [string]$Package,
         [string]$DisplayName
     )
-
+    
     $appName = $Package.Split("/")[-1]
-
+    
     if (Test-ScoopAppInstalled $appName) {
         Write-LogWarning "$DisplayName is already installed (skipping)"
         return $true
     }
-
+    
     Write-LogInfo "Installing $DisplayName..."
     try {
         scoop install $Package
@@ -127,7 +127,7 @@ function Install-ScoopPackage {
 # Interactive package selection
 function Show-PackageMenu {
     Write-Header "Select Packages to Install"
-
+    
     $packages = @(
         @{ Name = "Java OpenJDK 25"; Bucket = "java"; Package = "java/openjdk25"; Selected = $true },
         @{ Name = "Node.js LTS"; Bucket = "main"; Package = "main/nodejs-lts"; Selected = $true },
@@ -140,28 +140,28 @@ function Show-PackageMenu {
         @{ Name = "Slack"; Bucket = "extras"; Package = "extras/slack"; Selected = $true },
         @{ Name = "Visual Studio Code"; Bucket = "extras"; Package = "extras/vscode"; Selected = $true }
     )
-
+    
     Write-Host "  Select packages to install (Y/N for each, or A for all):`n" -ForegroundColor White
-
+    
     $installAll = Read-Host "  Install all packages? (Y/N)"
-
+    
     if ($installAll -eq "Y" -or $installAll -eq "y" -or $installAll -eq "A" -or $installAll -eq "a") {
         return $packages
     }
-
+    
     Write-Host ""
     foreach ($pkg in $packages) {
         $response = Read-Host "  Install $($pkg.Name)? (Y/N)"
         $pkg.Selected = ($response -eq "Y" -or $response -eq "y")
     }
-
+    
     return $packages
 }
 
 # Main installation function
 function Install-DeveloperEnvironment {
     Write-Header "Developer Environment Setup"
-
+    
     # Check if Scoop is installed
     if (-not (Test-ScoopInstalled)) {
         Write-LogWarning "Scoop is not installed"
@@ -169,41 +169,87 @@ function Install-DeveloperEnvironment {
             Write-LogError "Cannot proceed without Scoop"
             exit 1
         }
+        # Refresh PATH
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
-    }
-    else {
+    } else {
         Write-LogSuccess "Scoop is already installed"
     }
-
+    
     # Get user package selection
     $selectedPackages = Show-PackageMenu
     $packagesToInstall = $selectedPackages | Where-Object { $_.Selected -eq $true }
-
+    
     if ($packagesToInstall.Count -eq 0) {
         Write-LogWarning "No packages selected for installation"
         exit 0
     }
-
+    
     Write-Header "Installing Selected Packages"
-
+    
+    # Track installation results
+    $results = @{
+        Success = @()
+        Failed = @()
+        Skipped = @()
+    }
+    
     # Group packages by bucket
     $buckets = $packagesToInstall | ForEach-Object { $_.Bucket } | Select-Object -Unique
-
+    
     # Add required buckets
     Write-Step "Setting up Scoop buckets..."
     foreach ($bucket in $buckets) {
         Add-ScoopBucket $bucket
     }
-
+    
     # Install packages
     Write-Step "Installing packages..."
     foreach ($pkg in $packagesToInstall) {
-        Install-ScoopPackage -Package $pkg.Package -DisplayName $pkg.Name
+        $appName = $pkg.Package.Split("/")[-1]
+        
+        if (Test-ScoopAppInstalled $appName) {
+            Write-LogWarning "$($pkg.Name) is already installed"
+            $results.Skipped += $pkg.Name
+        }
+        elseif (Install-ScoopPackage -Package $pkg.Package -DisplayName $pkg.Name) {
+            $results.Success += $pkg.Name
+        }
+        else {
+            $results.Failed += $pkg.Name
+        }
     }
-
-    Write-Header "Installation Complete"
-    Write-LogSuccess "Setup completed successfully!"
-
+    
+    # Display summary
+    Write-Header "Installation Summary"
+    
+    if ($results.Success.Count -gt 0) {
+        Write-Host "  Successfully Installed:" -ForegroundColor Green
+        foreach ($item in $results.Success) {
+            Write-Host "    - $item" -ForegroundColor Green
+        }
+    }
+    
+    if ($results.Skipped.Count -gt 0) {
+        Write-Host "`n  Already Installed:" -ForegroundColor Yellow
+        foreach ($item in $results.Skipped) {
+            Write-Host "    - $item" -ForegroundColor Yellow
+        }
+    }
+    
+    if ($results.Failed.Count -gt 0) {
+        Write-Host "`n  Failed to Install:" -ForegroundColor Red
+        foreach ($item in $results.Failed) {
+            Write-Host "    - $item" -ForegroundColor Red
+        }
+    }
+    
+    Write-Host ""
+    if ($results.Failed.Count -eq 0) {
+        Write-LogSuccess "Setup completed successfully!"
+    } else {
+        Write-LogWarning "Setup completed with some failures"
+    }
+    
     Write-Host "`n  Press any key to exit..." -ForegroundColor Gray
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
