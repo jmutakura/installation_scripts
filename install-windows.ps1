@@ -136,7 +136,9 @@ function Show-PackageMenu {
         @{ Name = "Git"; Bucket = "main"; Package = "main/git"; Selected = $true },
         @{ Name = "Android Studio"; Bucket = "extras"; Package = "extras/android-studio"; Selected = $true },
         @{ Name = "IntelliJ IDEA"; Bucket = "extras"; Package = "extras/idea"; Selected = $true },
-        @{ Name = "Google Chrome"; Bucket = "extras"; Package = "extras/googlechrome"; Selected = $true }
+        @{ Name = "Google Chrome"; Bucket = "extras"; Package = "extras/googlechrome"; Selected = $true },
+        @{ Name = "Slack"; Bucket = "extras"; Package = "extras/slack"; Selected = $true },
+        @{ Name = "Visual Studio Code"; Bucket = "extras"; Package = "extras/vscode"; Selected = $true }
     )
     
     Write-Host "  Select packages to install (Y/N for each, or A for all):`n" -ForegroundColor White
