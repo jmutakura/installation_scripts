@@ -2,18 +2,19 @@
 # Developer Environment Setup Script (Scoop)
 # ============================================
 
-# Color functions for good output
+# Display functions
 function Write-Header {
     param([string]$Message)
     $width = 64
     $padding = $width - $Message.Length
     $leftPad = [Math]::Floor($padding / 2)
     $rightPad = $padding - $leftPad
-    
-    $topLine = "+" + ("-" * $width) + "+"
-    $middleLine = "|" + (" " * $leftPad) + $Message + (" " * $rightPad) + "|"
-    $bottomLine = "+" + ("-" * $width) + "+"
-    
+
+    $line = [string]::new([char]0x2500, $width)
+    $topLine = [char]0x256D + $line + [char]0x256E
+    $middleLine = [char]0x2502 + (" " * $leftPad) + $Message + (" " * $rightPad) + [char]0x2502
+    $bottomLine = [char]0x2570 + $line + [char]0x256F
+
     Write-Host "`n$topLine" -ForegroundColor Magenta
     Write-Host $middleLine -ForegroundColor Magenta
     Write-Host "$bottomLine`n" -ForegroundColor Magenta
@@ -21,32 +22,38 @@ function Write-Header {
 
 function Write-LogError {
     param([string]$Message)
-    Write-Host "  [X] " -ForegroundColor Red -NoNewline
-    Write-Host $Message -ForegroundColor Red
+    Write-Host "  " -NoNewline
+    Write-Host ([char]0x2717) -ForegroundColor Red -NoNewline
+    Write-Host "  $Message" -ForegroundColor Red
 }
 
 function Write-LogSuccess {
     param([string]$Message)
-    Write-Host "  [OK] " -ForegroundColor Green -NoNewline
-    Write-Host $Message -ForegroundColor Green
+    Write-Host "  " -NoNewline
+    Write-Host ([char]0x2713) -ForegroundColor Green -NoNewline
+    Write-Host "  $Message" -ForegroundColor Green
 }
 
 function Write-LogInfo {
     param([string]$Message)
-    Write-Host "  [i] " -ForegroundColor Cyan -NoNewline
-    Write-Host $Message -ForegroundColor White
+    Write-Host "  " -NoNewline
+    Write-Host ([char]0x25C6) -ForegroundColor Cyan -NoNewline
+    Write-Host "  $Message" -ForegroundColor White
 }
 
 function Write-LogWarning {
     param([string]$Message)
-    Write-Host "  [!] " -ForegroundColor Yellow -NoNewline
-    Write-Host $Message -ForegroundColor Yellow
+    Write-Host "  " -NoNewline
+    Write-Host ([char]0x26A0) -ForegroundColor Yellow -NoNewline
+    Write-Host "  $Message" -ForegroundColor Yellow
 }
 
 function Write-Step {
     param([string]$Message)
-    Write-Host "`n  >> " -ForegroundColor Blue -NoNewline
-    Write-Host $Message -ForegroundColor White
+    Write-Host ""
+    Write-Host "  " -NoNewline
+    Write-Host ([char]0x276F) -ForegroundColor Blue -NoNewline
+    Write-Host "  $Message" -ForegroundColor White
 }
 
 # Check if Scoop is installed

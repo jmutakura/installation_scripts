@@ -22,33 +22,35 @@ function write_header() {
     local padding=$((width - ${#message}))
     local left_pad=$((padding / 2))
     local right_pad=$((padding - left_pad))
-    
+    local line
+    line=$(printf '─%.0s' $(seq 1 $width))
+
     echo ""
-    echo -e "${MAGENTA}+$(printf '%*s' "$width" | tr ' ' '-')+${NC}"
-    echo -e "${MAGENTA}|$(printf '%*s' "$left_pad")${message}$(printf '%*s' "$right_pad)|${NC}"
-    echo -e "${MAGENTA}+$(printf '%*s' "$width" | tr ' ' '-')+${NC}"
+    echo -e "${MAGENTA}╭${line}╮${NC}"
+    echo -e "${MAGENTA}│$(printf "%${left_pad}s")${message}$(printf "%${right_pad}s")│${NC}"
+    echo -e "${MAGENTA}╰${line}╯${NC}"
     echo ""
 }
 
 function write_log_error() {
-    echo -e "  ${RED}[X]${NC} ${RED}$1${NC}"
+    echo -e "  ${RED}✗${NC}  ${RED}$1${NC}"
 }
 
 function write_log_success() {
-    echo -e "  ${GREEN}[OK]${NC} ${GREEN}$1${NC}"
+    echo -e "  ${GREEN}✓${NC}  ${GREEN}$1${NC}"
 }
 
 function write_log_info() {
-    echo -e "  ${CYAN}[i]${NC} ${WHITE}$1${NC}"
+    echo -e "  ${CYAN}◆${NC}  ${WHITE}$1${NC}"
 }
 
 function write_log_warning() {
-    echo -e "  ${YELLOW}[!]${NC} ${YELLOW}$1${NC}"
+    echo -e "  ${YELLOW}⚠${NC}  ${YELLOW}$1${NC}"
 }
 
 function write_step() {
     echo ""
-    echo -e "  ${BLUE}>>${NC} ${WHITE}$1${NC}"
+    echo -e "  ${BLUE}❯${NC}  ${WHITE}$1${NC}"
 }
 
 # Check if Homebrew is installed
